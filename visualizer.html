@@ -277,25 +277,40 @@
       gap: 8px;
     }
 
-    .play-btn {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: #0f172a;
+    .main-play-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #1e293b, #0f172a);
       color: #ffffff;
-      border: none;
+      border: 1px solid #334155;
+      padding: 9px 12px;
+      border-radius: 7px;
+      font-size: 0.8rem;
+      font-weight: 700;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.95rem;
-      flex-shrink: 0;
-      transition: background 0.15s ease, transform 0.1s ease;
+      gap: 8px;
+      letter-spacing: 0.02em;
+      transition: all 0.15s ease;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
-    .play-btn:hover {
-      background: #1e293b;
-      transform: scale(1.05);
+    .main-play-btn:hover {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(37,99,235,0.25);
+    }
+
+    .main-play-btn.is-playing {
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+      border-color: #ef4444;
+      animation: pulse-border 1.5s infinite;
+    }
+
+    @keyframes pulse-border {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+      50% { box-shadow: 0 0 0 4px rgba(220, 38, 38, 0); }
     }
 
     .audio-timeline {
@@ -736,16 +751,19 @@
 
         <!-- Continuous Audio Player -->
         <div class="audio-player-card">
-          <div class="audio-controls">
-            <button class="play-btn" id="playBtn" onclick="togglePlay()">▶</button>
-            <div class="audio-timeline">
-              <div class="audio-time-label">
-                <span id="curTimeLabel">0.00s</span>
-                <span id="totalTimeLabel">12.00s</span>
-              </div>
-              <input type="range" class="scrubber" id="audioScrubber" min="0" max="1" step="0.005" value="0" oninput="onScrub(this.value)">
+          <button class="main-play-btn" id="playBtn" onclick="togglePlay()">
+            <span id="playBtnIcon" style="font-size:1.05rem;">▶</span>
+            <span id="playBtnText">PLAY VOCALIZATION (12s)</span>
+          </button>
+          
+          <div class="audio-timeline" style="margin-top:8px;">
+            <div class="audio-time-label">
+              <span id="curTimeLabel">0.00s</span>
+              <span id="totalTimeLabel">12.00s</span>
             </div>
+            <input type="range" class="scrubber" id="audioScrubber" min="0" max="1" step="0.005" value="0" oninput="onScrub(this.value)">
           </div>
+
           <div class="speed-btns">
             <span style="font-size:0.65rem; color:var(--text-secondary); align-self:center; margin-right:3px;">Speed:</span>
             <button class="speed-btn" onclick="setSpeed(0.5)">0.5x Slow</button>
@@ -995,21 +1013,19 @@
       });
     }
 
-    // Build the Small Bird Images Gallery beside the graph
+    // Build the Small Bird Images Gallery beside the graph (All 20 Species)
     function buildSpeciesGallery() {
       speciesGalleryContainer.innerHTML = '';
-      
-      // Combine 12s species list with full dataset to show all 20 species
-      const allSpeciesList = dataset1s.species || [];
-
-      allSpeciesList.forEach((sp, idx) => {
+      dataset12s.species.forEach((sp, idx) => {
         const item = document.createElement('div');
         item.className = 'thumb-item';
         item.id = `thumb-sp-${idx}`;
         if (idx === 0) item.classList.add('active-thumb');
 
-        const imgUrl = sp.image_url || `images/${sp.species.replace(/ /g, '_').replace(/[()]/g, '')}.jpg`;
-        const freqLabel = `${sp.frequency_range_khz ? sp.frequency_range_khz[0] : 1.0} - ${sp.frequency_range_khz ? sp.frequency_range_khz[1] : 6.0} kHz`;
+        const imgUrl = sp.image_url || `images/${sp.species.replace(/ /g, '_')}.jpg`;
+        const minF = Math.round(Math.min(...sp.trajectory.map(p => p.freq_khz * 1000)));
+        const maxF = Math.round(Math.max(...sp.trajectory.map(p => p.freq_khz * 1000)));
+        const freqLabel = `${(minF/1000).toFixed(1)} - ${(maxF/1000).toFixed(1)} kHz`;
 
         item.innerHTML = `
           <img class="thumb-img" src="${imgUrl}" alt="${sp.common_name}" onerror="this.src='images/Acrocephalus_arundinaceus.jpg'">
@@ -1020,15 +1036,8 @@
         `;
 
         item.onclick = () => {
-          // Check if this species exists in 12s continuous set
-          const idx12s = dataset12s.species.findIndex(s => s.species.toLowerCase() === sp.species.toLowerCase() || s.common_name.toLowerCase() === sp.common_name.toLowerCase());
-          if (idx12s >= 0) {
-            document.getElementById('speciesSelect').value = idx12s;
-            selectSpecies(idx12s);
-          } else {
-            // Select nearest 12s or update active card
-            updateActiveBirdCardFrom1s(sp);
-          }
+          document.getElementById('speciesSelect').value = idx;
+          selectSpecies(idx);
           highlightThumb(idx);
         };
 
@@ -1048,6 +1057,7 @@
     function onSpeciesChange() {
       const idx = parseInt(document.getElementById('speciesSelect').value);
       selectSpecies(idx);
+      highlightThumb(idx);
     }
 
     function selectSpecies(idx) {
@@ -1067,12 +1077,11 @@
       activeBirdBadge.textContent = sp.category.split('&')[0];
       activeBirdNotes.textContent = `${sp.notes_count} notes`;
       activeBirdDur.textContent = `${sp.duration_sec.toFixed(1)}s`;
-      activeBirdBand.textContent = `${(sp.trajectory[0]?.freq_khz || 1.5).toFixed(1)} - 7.5 kHz`;
+      
+      const minF = Math.round(Math.min(...sp.trajectory.map(p => p.freq_khz * 1000)));
+      const maxF = Math.round(Math.max(...sp.trajectory.map(p => p.freq_khz * 1000)));
+      activeBirdBand.textContent = `${(minF/1000).toFixed(1)} - ${(maxF/1000).toFixed(1)} kHz`;
       activeBirdCall.textContent = sp.category.split(' ')[0];
-
-      // Highlight thumb in gallery
-      const thumbIdx = dataset1s.species.findIndex(s => s.species.toLowerCase() === sp.species.toLowerCase());
-      if (thumbIdx >= 0) highlightThumb(thumbIdx);
 
       // Load Audio
       if (sp.audio_url) {
@@ -1085,19 +1094,7 @@
       curTimeLabel.textContent = '0.00s';
 
       populateNotesList(sp.notes || []);
-      renderPlot(0.0);
-    }
-
-    function updateActiveBirdCardFrom1s(sp) {
-      const imgPath = sp.image_url || `images/${sp.species.replace(/ /g, '_').replace(/[()]/g, '')}.jpg`;
-      activeBirdImg.src = imgPath;
-      activeBirdName.textContent = sp.common_name;
-      activeBirdSci.textContent = sp.species;
-      activeBirdBadge.textContent = sp.category.split('&')[0];
-      activeBirdNotes.textContent = `Vocal Call`;
-      activeBirdDur.textContent = `1.0s (Clip)`;
-      activeBirdBand.textContent = `${sp.frequency_range_khz[0]} - ${sp.frequency_range_khz[1]} kHz`;
-      activeBirdCall.textContent = sp.category.split(' ')[0];
+      renderPlot(0.0, true); // true = new species, full redraw!
     }
 
     function populateNotesList(notes) {
@@ -1128,29 +1125,33 @@
         `;
 
         item.onclick = () => {
-          jumpToTime(n.start_time);
+          jumpToTime(n.start_time, true);
         };
 
         item.onmouseenter = () => {
           hoveredNoteId = n.id;
-          renderPlot(audioElement.currentTime || n.start_time);
+          renderPlot(audioElement.currentTime || n.start_time, false);
         };
 
         item.onmouseleave = () => {
           hoveredNoteId = null;
-          renderPlot(audioElement.currentTime || 0.0);
+          renderPlot(audioElement.currentTime || 0.0, false);
         };
 
         container.appendChild(item);
       });
     }
 
-    function jumpToTime(sec) {
+    function jumpToTime(sec, autoPlay = false) {
       audioElement.currentTime = sec;
       curTimeLabel.textContent = `${sec.toFixed(2)}s`;
-      scrubber.value = sec / (audioElement.duration || 12.0);
+      const maxDur = dataset12s?.species[currentSpeciesIdx]?.duration_sec || 12.0;
+      scrubber.value = sec / maxDur;
       updateLiveHUD(sec);
-      renderPlot(sec);
+      renderPlot(sec, false);
+      if (autoPlay && !isPlaying) {
+        playAudio();
+      }
     }
 
     function setColorMode(mode) {
@@ -1169,7 +1170,7 @@
         captionLeftLabel.textContent = '🎨 Points colored by species cluster identity';
       }
 
-      renderPlot(audioElement.currentTime || 0.0);
+      renderPlot(audioElement.currentTime || 0.0, false);
     }
 
     function setSpeed(speed) {
@@ -1189,19 +1190,36 @@
     }
 
     function playAudio() {
+      const btn = document.getElementById('playBtn');
+      const icon = document.getElementById('playBtnIcon');
+      const txt = document.getElementById('playBtnText');
+
       audioElement.play().then(() => {
         isPlaying = true;
-        playBtn.textContent = '⏸';
-        playBtn.style.background = '#dc2626';
+        if (btn) btn.classList.add('is-playing');
+        if (icon) icon.textContent = '⏸';
+        if (txt) txt.textContent = 'PAUSE VOCALIZATION';
         loopPlayback();
-      }).catch(e => console.warn(e));
+      }).catch(e => {
+        console.warn('Audio play auto-fallback:', e);
+        isPlaying = true;
+        if (btn) btn.classList.add('is-playing');
+        if (icon) icon.textContent = '⏸';
+        if (txt) txt.textContent = 'PAUSE 3D MOTION';
+        loopPlayback();
+      });
     }
 
     function pauseAudio() {
       audioElement.pause();
       isPlaying = false;
-      playBtn.textContent = '▶';
-      playBtn.style.background = '#0f172a';
+      const btn = document.getElementById('playBtn');
+      const icon = document.getElementById('playBtnIcon');
+      const txt = document.getElementById('playBtnText');
+      if (btn) btn.classList.remove('is-playing');
+      if (icon) icon.textContent = '▶';
+      const dur = (dataset12s?.species[currentSpeciesIdx]?.duration_sec || 12.0).toFixed(0);
+      if (txt) txt.textContent = `PLAY VOCALIZATION (${dur}s)`;
       if (animFrame) cancelAnimationFrame(animFrame);
     }
 
@@ -1209,34 +1227,49 @@
       pauseAudio();
       scrubber.value = 0;
       curTimeLabel.textContent = '0.00s';
-      renderPlot(0.0);
+      renderPlot(0.0, false);
     }
 
     function onAudioTimeUpdate() {
       if (!isPlaying) return;
       const t = audioElement.currentTime;
-      const dur = audioElement.duration || 12.0;
+      const dur = audioElement.duration || dataset12s?.species[currentSpeciesIdx]?.duration_sec || 12.0;
       scrubber.value = t / dur;
       curTimeLabel.textContent = `${t.toFixed(2)}s`;
     }
 
     function onScrub(val) {
-      const dur = audioElement.duration || 12.0;
+      const dur = audioElement.duration || dataset12s?.species[currentSpeciesIdx]?.duration_sec || 12.0;
       const t = parseFloat(val) * dur;
       audioElement.currentTime = t;
       curTimeLabel.textContent = `${t.toFixed(2)}s`;
       updateLiveHUD(t);
-      renderPlot(t);
+      renderPlot(t, false);
     }
 
+    let simTime = 0.0;
     function loopPlayback() {
       if (!isPlaying) return;
-      const t = audioElement.currentTime;
+      const sp = dataset12s.species[currentSpeciesIdx];
+      const maxDur = sp.duration_sec || 12.0;
+
+      let t = audioElement.currentTime;
+      // If audio is paused (e.g. browser policy), advance virtual time smoothly
+      if (audioElement.paused) {
+        simTime += 0.033;
+        if (simTime > maxDur) simTime = 0.0;
+        t = simTime;
+        curTimeLabel.textContent = `${t.toFixed(2)}s`;
+        scrubber.value = t / maxDur;
+      } else {
+        simTime = t;
+      }
+
       const now = performance.now();
-      if (now - lastRender > 28) {
+      if (now - lastRender > 30) {
         lastRender = now;
         updateLiveHUD(t);
-        renderPlot(t);
+        renderPlot(t, false);
       }
       animFrame = requestAnimationFrame(loopPlayback);
     }
@@ -1283,7 +1316,7 @@
     }
 
     // MAIN 3D POINT CLOUD RENDERER
-    function renderPlot(currentTime = null) {
+    function renderPlot(currentTime = null, isNewSpecies = false) {
       if (!dataset12s) return;
       const sp = dataset12s.species[currentSpeciesIdx];
       const traj = sp.trajectory;
@@ -1467,7 +1500,17 @@
 
       // Preserve existing user camera rotation so audio playback doesn't reset user view
       const plotDiv = document.getElementById('plotCanvas');
-      const curCamera = plotDiv?._fullLayout?.scene?._scene?.camera || null;
+      let curCamera = null;
+      if (!isNewSpecies && plotDiv?._fullLayout?.scene?.camera) {
+        const c = plotDiv._fullLayout.scene.camera;
+        curCamera = {
+          eye: { x: c.eye.x, y: c.eye.y, z: c.eye.z },
+          center: { x: c.center.x, y: c.center.y, z: c.center.z },
+          up: { x: c.up.x, y: c.up.y, z: c.up.z }
+        };
+      }
+
+      const durMax = Math.max(1.0, sp.duration_sec || 12.0);
 
       const layout = {
         paper_bgcolor: '#fafaf8',
@@ -1489,7 +1532,7 @@
             gridcolor: '#e5e7eb',
             showbackground: true,
             zerolinecolor: '#cbd5e1',
-            range: [0, 12.0]
+            range: [0, durMax]
           },
           yaxis: {
             title: { text: 'Frequency (Hz)', font: { size: 11, color: '#64748b' } },
@@ -1505,7 +1548,7 @@
             gridcolor: '#e5e7eb',
             showbackground: true,
             zerolinecolor: '#cbd5e1',
-            range: [-60, -10]
+            range: [-65, 0]
           },
           camera: curCamera || {
             eye: { x: 1.5, y: -1.75, z: 1.25 },
@@ -1523,7 +1566,7 @@
         modeBarButtonsToRemove: ['toImage', 'resetCameraDefault3d']
       };
 
-      if (!plotDiv.data || plotDiv.data.length === 0) {
+      if (isNewSpecies || !plotDiv.data || plotDiv.data.length === 0) {
         Plotly.newPlot('plotCanvas', traces, layout, config);
       } else {
         Plotly.react('plotCanvas', traces, layout, config);
