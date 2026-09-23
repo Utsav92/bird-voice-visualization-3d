@@ -694,6 +694,7 @@
     <div class="header-badges">
       <span class="badge badge-primary">20 Wetland Species</span>
       <span class="badge">12.0s Continuous Audio</span>
+      <span class="badge" style="background:#fef3c7; color:#b45309; border-color:#fde68a;">🔍 Dynamic Note Magnification</span>
       <span class="badge">Confidence-Encoded Opacity</span>
     </div>
   </header>
@@ -830,7 +831,7 @@
         <!-- Bottom Caption Banner -->
         <div class="caption-banner">
           <div class="caption-pill" id="captionLeftLabel">
-            🌈 Colored by continuous frequency rainbow spectrum • Opacity encodes acoustic model confidence
+            🌈 Colored by frequency rainbow • Points dynamically magnify during note articulation (up to 16px)
           </div>
           <div class="caption-pill" id="captionRightLabel" style="font-weight:700; color:#0f172a;">
             Great Reed Warbler (Zenodo 7505820)
@@ -902,6 +903,7 @@
     let isPlaying = false;
     let animFrame = null;
     let lastRender = 0;
+    let hoveredNoteId = null;
 
     // DOM Elements
     const audioElement = document.getElementById('audioElement');
@@ -1129,6 +1131,16 @@
           jumpToTime(n.start_time);
         };
 
+        item.onmouseenter = () => {
+          hoveredNoteId = n.id;
+          renderPlot(audioElement.currentTime || n.start_time);
+        };
+
+        item.onmouseleave = () => {
+          hoveredNoteId = null;
+          renderPlot(audioElement.currentTime || 0.0);
+        };
+
         container.appendChild(item);
       });
     }
@@ -1257,7 +1269,7 @@
       }
 
       if (p.note_id) {
-        activeNoteStatus.innerHTML = `Active Note: <strong>#${p.note_id} (${p.note_type})</strong>`;
+        activeNoteStatus.innerHTML = `Active Note: <strong>#${p.note_id} (${p.note_type})</strong> <span class="badge" style="background:#fef3c7; color:#b45309; border-color:#fde68a; font-size:0.6rem; padding:1px 4px;">🔍 MAGNIFIED</span>`;
         document.querySelectorAll('.note-item').forEach(el => el.classList.remove('active-note'));
         const activeEl = document.getElementById(`note-${p.note_id}`);
         if (activeEl) {
@@ -1285,9 +1297,57 @@
       const freqsHz = traj.map(p => p.freq_khz * 1000.0);
       const dbs = traj.map(p => p.db);
 
-      // Generate colors according to chosen Color Mode
+      const curT = currentTime !== null ? currentTime : -1;
+
+      // Identify active note (from playback time or note list hover)
+      let activeNote = null;
+      let activeNoteId = hoveredNoteId;
+
+      if (activeNoteId === null && curT >= 0 && sp.notes) {
+        activeNote = sp.notes.find(n => curT >= (n.start_time - 0.04) && curT <= (n.end_time + 0.04));
+        if (activeNote) {
+          activeNoteId = activeNote.id;
+        }
+      } else if (activeNoteId !== null && sp.notes) {
+        activeNote = sp.notes.find(n => n.id === activeNoteId);
+      }
+
+      // Dynamic per-point magnification array
+      const sizes = traj.map(p => {
+        const isPointInNote = activeNoteId !== null && (
+          p.note_id === activeNoteId ||
+          (activeNote && p.time >= activeNote.start_time && p.time <= activeNote.end_time)
+        );
+
+        if (isPointInNote) {
+          // MAGNIFY the points of the active note!
+          if (curT >= 0) {
+            // Gaussian pulse wave centered at current playback time: peak up to 16px!
+            const dt = Math.abs(p.time - curT);
+            const wavePulse = Math.exp(-(dt * dt) / 0.05) * 6.5;
+            return Math.round(pointSize + 5.5 + wavePulse);
+          } else {
+            return Math.round(pointSize + 6.0);
+          }
+        }
+        return pointSize;
+      });
+
+      // Generate colors according to chosen Color Mode with boosted brightness for active note
       const colors = traj.map(p => {
-        const conf = Math.max(0.25, Math.min(0.95, (p.db + 58.0) / 42.0));
+        const isPointInNote = activeNoteId !== null && (
+          p.note_id === activeNoteId ||
+          (activeNote && p.time >= activeNote.start_time && p.time <= activeNote.end_time)
+        );
+
+        let conf = Math.max(0.25, Math.min(0.95, (p.db + 58.0) / 42.0));
+        if (isPointInNote) {
+          conf = 1.0; // 100% full opacity & luminous pop
+        } else if (activeNoteId !== null) {
+          // Subtly dim non-active points to enhance contrast
+          conf = Math.max(0.18, conf * 0.72);
+        }
+
         const freqHz = p.freq_khz * 1000.0;
         const slope = p.slope_hz_s || 0.0;
 
@@ -1296,9 +1356,14 @@
         } else if (currentColorMode === 'rainbow-slope') {
           return getRainbowSlopeColor(slope, conf);
         } else if (currentColorMode === 'dark-contrast') {
+          if (isPointInNote) {
+            return `rgba(2, 6, 23, 1.0)`;
+          }
           return getDarkContrastColor(conf);
         } else {
-          // Species Color (high contrast)
+          if (isPointInNote) {
+            return `rgba(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]}, 1.0)`;
+          }
           return `rgba(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]}, ${conf.toFixed(2)})`;
         }
       });
@@ -1313,7 +1378,7 @@
         z: dbs,
         mode: 'markers',
         marker: {
-          size: pointSize,
+          size: sizes,
           color: colors,
           line: { width: 0 }
         },
@@ -1328,9 +1393,10 @@
         text: traj.map(p => p.pitch_trend === 'rising' ? 'Pitch Rising ↗' : (p.pitch_trend === 'falling' ? 'Pitch Falling ↘' : 'Steady Tone ◆'))
       });
 
-      // 2. Note Trajectory Guide Lines (Subtle and clean, not tangled yellow)
+      // 2. Note Trajectory Guide Lines (Active note trajectory line magnifies to 5.5px)
       if (lineOption === 'subtle' && sp.notes) {
         sp.notes.forEach(n => {
+          const isNoteActive = activeNoteId !== null && n.id === activeNoteId;
           const nPts = traj.filter(p => p.time >= n.start_time && p.time <= n.end_time);
           if (nPts.length > 2) {
             traces.push({
@@ -1340,8 +1406,8 @@
               z: nPts.map(p => p.db),
               mode: 'lines',
               line: {
-                color: 'rgba(71, 85, 105, 0.28)', // Subtle dark slate line
-                width: 2.0
+                color: isNoteActive ? '#dc2626' : 'rgba(71, 85, 105, 0.28)',
+                width: isNoteActive ? 5.5 : 2.0
               },
               hoverinfo: 'none',
               showlegend: false
