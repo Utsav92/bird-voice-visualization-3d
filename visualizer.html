@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Avian 3D Acoustic Point Cloud - Bird Voice Frequency Changes</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    :root {
+      --bg-main: #fbfbf9;
+      --card-bg: #ffffff;
+      --border-color: #e2e8f0;
+      --border-subtle: #edf2f7;
+      --text-primary: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --accent: #2563eb;
+      --accent-light: #eff6ff;
+      --rising: #059669;
+      --falling: #dc2626;
+      --steady: #0284c7;
+      --trill: #7c3aed;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .title-group h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .title-group p {
+      font-size: 0.76rem;
+      color: var(--text-secondary);
+      margin-top: 1px;
+    }
+
+    .nav-tabs {
+      display: flex;
+      background: #f1f5f9;
+      padding: 3px;
+      border-radius: 8px;
+      gap: 4px;
+    }
+
+    .nav-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      padding: 5px 12px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .nav-btn.active {
+      background: #ffffff;
+      color: var(--accent);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: var(--accent-light);
+      color: var(--accent);
+      border: 1px solid #bfdbfe;
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 310px 1fr;
+      gap: 14px;
+      padding: 14px;
+      height: calc(100vh - 60px);
+    }
+
+    @media (max-width: 1024px) {
+      main {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .sidebar::-webkit-scrollbar { width: 5px; }
+    .sidebar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+
+    .panel-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #475569;
+      margin-bottom: 8px;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .form-group { margin-bottom: 8px; }
+    .form-group:last-child { margin-bottom: 0; }
+
+    label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      margin-bottom: 3px;
+      font-weight: 600;
+    }
+
+    select, input[type="range"] { width: 100%; }
+
+    select {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      color: var(--text-primary);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      outline: none;
+    }
+
+    select:focus {
+      border-color: var(--accent);
+      background: #ffffff;
+    }
+
+    /* Live Tone Dynamics Display */
+    .tone-live-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 7px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+    }
+
+    .live-pitch-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 2px;
+    }
+
+    .live-freq-val {
+      font-size: 1.25rem;
+      font-weight: 800;
+      font-family: monospace;
+      color: #0f172a;
+    }
+
+    .tone-trend-pill {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .trend-rising {
+      background: #ecfdf5;
+      color: var(--rising);
+      border: 1px solid #a7f3d0;
+    }
+
+    .trend-falling {
+      background: #fef2f2;
+      color: var(--falling);
+      border: 1px solid #fecaca;
+    }
+
+    .trend-steady {
+      background: #f0f9ff;
+      color: var(--steady);
+      border: 1px solid #bae6fd;
+    }
+
+    .trend-silence {
+      background: #f1f5f9;
+      color: #64748b;
+      border: 1px solid #e2e8f0;
+    }
+
+    /* Audio Player */
+    .audio-player-card {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+      padding: 10px;
+    }
+
+    .audio-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .play-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #0f172a;
+      border: none;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.1rem;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .play-btn:hover {
+      background: var(--accent);
+      transform: scale(1.05);
+    }
+
+    .audio-timeline {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .audio-time-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      font-family: monospace;
+    }
+
+    .scrubber {
+      width: 100%;
+      accent-color: #0f172a;
+      cursor: pointer;
+    }
+
+    .speed-btns {
+      display: flex;
+      gap: 4px;
+      margin-top: 6px;
+      justify-content: flex-end;
+    }
+
+    .speed-btn {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      color: var(--text-secondary);
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .speed-btn.active {
+      background: #0f172a;
+      border-color: #0f172a;
+      color: #ffffff;
+    }
+
+    /* Note Sequence List */
+    .note-list-container {
+      max-height: 180px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 4px;
+      padding-right: 4px;
+    }
+
+    .note-list-container::-webkit-scrollbar { width: 5px; }
+    .note-list-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+    .note-item {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .note-item:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    .note-item.active-note {
+      background: #eff6ff;
+      border-color: #93c5fd;
+      font-weight: 600;
+    }
+
+    /* Right Viewport Area: Split into 3D Plot + Alongside Bird Card */
+    .viewport-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      height: 100%;
+    }
+
+    .viz-toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 6px 12px;
+    }
+
+    .btn-group { display: flex; gap: 6px; }
+
+    .tool-btn {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      color: var(--text-secondary);
+      padding: 4px 9px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .tool-btn:hover { background: #f1f5f9; color: var(--text-primary); }
+    .tool-btn.active {
+      background: #0f172a;
+      border-color: #0f172a;
+      color: #ffffff;
+    }
+
+    /* Dedicated Split Row: 3D Plot on Left + Bird Showcase alongside it on Right */
+    .plot-and-bird-split {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 310px;
+      gap: 12px;
+      min-height: 520px;
+    }
+
+    @media (max-width: 1200px) {
+      .plot-and-bird-split {
+        grid-template-columns: 1fr 270px;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .plot-and-bird-split {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .viz-canvas {
+      height: 100%;
+      min-height: 500px;
+      background: #fafaf8;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* THE ALONGSIDE BIRD SHOWCASE CARD */
+    .alongside-bird-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    }
+
+    .alongside-header {
+      padding: 10px 14px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .alongside-title {
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #334155;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .alongside-img-wrapper {
+      position: relative;
+      width: 100%;
+      height: 230px;
+      background: #0f172a;
+      overflow: hidden;
+    }
+
+    .alongside-bird-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      transition: transform 0.3s ease, opacity 0.25s ease;
+    }
+
+    .alongside-bird-img:hover {
+      transform: scale(1.05);
+    }
+
+    .alongside-img-gradient {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: linear-gradient(180deg, transparent 0%, rgba(15, 23, 42, 0.75) 100%);
+      pointer-events: none;
+    }
+
+    .alongside-details {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .alongside-species-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.2;
+    }
+
+    .alongside-species-sci {
+      font-size: 0.78rem;
+      font-style: italic;
+      color: #64748b;
+      margin-top: 1px;
+    }
+
+    .alongside-stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      background: #f8fafc;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .alongside-stat-box {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .alongside-stat-label {
+      font-size: 0.65rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .alongside-stat-val {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #0f172a;
+      font-family: monospace;
+    }
+
+    .alongside-bio-text {
+      font-size: 0.75rem;
+      color: #475569;
+      line-height: 1.45;
+    }
+
+    /* Bottom Caption Banner Matching Image 2 */
+    .caption-banner {
+      position: absolute;
+      bottom: 10px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      color: #64748b;
+      pointer-events: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .caption-left {
+      background: rgba(255, 255, 255, 0.94);
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .caption-right {
+      background: rgba(255, 255, 255, 0.94);
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+      font-weight: 600;
+      color: #334155;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="title-group">
+      <h1>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><circle cx="12" cy="12" r="10"/><path d="m10 8 6 4-6 4V8z"/></svg>
+        Avian 3D Acoustic Point Cloud
+      </h1>
+      <p>Continuous Vocalization Frequency Trajectories & Note Tone Tracking | Zenodo 7505820</p>
+    </div>
+
+    <div class="nav-tabs">
+      <button class="nav-btn active" id="tabSingle" onclick="switchView('single')">Single Species (12s Continuous)</button>
+      <button class="nav-btn" id="tabMulti" onclick="switchView('multi')">All Species Point Cloud (Image 2 View)</button>
+    </div>
+
+    <div>
+      <span class="badge">
+        <span style="color:#059669">●</span> Confidence Point Opacity
+      </span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Left Sidebar: Controls, Audio & Notes -->
+    <div class="sidebar">
+
+      <!-- Species Selector -->
+      <div class="panel" id="speciesControlPanel">
+        <div class="panel-title">
+          <span>Species Selection</span>
+          <span class="badge" id="categoryBadge">Songbird</span>
+        </div>
+
+        <div class="form-group">
+          <select id="speciesSelect" onchange="onSpeciesChange()">
+            <!-- Populated by JS -->
+          </select>
+        </div>
+
+        <!-- Live Tone Dynamics Meter -->
+        <div class="tone-live-card">
+          <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; font-weight:600;">
+            Real-Time Voice Pitch & Motion
+          </div>
+          <div class="live-pitch-row">
+            <div class="live-freq-val" id="livePitchVal">0 <span style="font-size:0.75rem; color:#64748b; font-weight:normal;">Hz</span></div>
+            <div class="tone-trend-pill trend-silence" id="liveTrendPill">
+              <span id="trendIcon">○</span>
+              <span id="trendText">STANDBY</span>
+            </div>
+          </div>
+          <div style="font-size:0.68rem; color:#475569; margin-top:3px;" id="activeNoteStatus">
+            Active Note: None
+          </div>
+        </div>
+
+        <!-- 12-Second Continuous Audio Player -->
+        <div class="audio-player-card">
+          <div class="audio-controls">
+            <button class="play-btn" id="playBtn" onclick="togglePlay()">▶</button>
+            <div class="audio-timeline">
+              <div class="audio-time-label">
+                <span id="curTimeLabel">0.00s</span>
+                <span id="totalTimeLabel">12.00s</span>
+              </div>
+              <input type="range" class="scrubber" id="audioScrubber" min="0" max="1" step="0.005" value="0" oninput="onScrub(this.value)">
+            </div>
+          </div>
+          <div class="speed-btns">
+            <span style="font-size:0.66rem; color:var(--text-secondary); align-self:center; margin-right:4px;">Speed:</span>
+            <button class="speed-btn" onclick="setSpeed(0.5)">0.5x Slow</button>
+            <button class="speed-btn" onclick="setSpeed(0.75)">0.75x</button>
+            <button class="speed-btn active" onclick="setSpeed(1.0)">1.0x Normal</button>
+          </div>
+          <audio id="audioElement" preload="auto" onended="onAudioEnded()" ontimeupdate="onAudioTimeUpdate()"></audio>
+        </div>
+      </div>
+
+      <!-- Detected Notes / Tones List -->
+      <div class="panel" id="notesPanel">
+        <div class="panel-title">
+          <span>Detected Notes / Tones</span>
+          <span class="badge" id="notesCountBadge">0 Notes</span>
+        </div>
+        <p style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:5px;">
+          Click any note to seek audio & observe the 3D point climb/descend:
+        </p>
+        <div class="note-list-container" id="noteListContainer">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Point Cloud Visualization Options -->
+      <div class="panel">
+        <div class="panel-title">
+          <span>Point Cloud Controls</span>
+        </div>
+        <div class="form-group" style="display:flex; gap:6px;">
+          <div style="flex:1">
+            <label>Point Size:</label>
+            <select id="pointSizeSelect" onchange="renderPlot()">
+              <option value="4">Standard (Image 2)</option>
+              <option value="5">Large (5px)</option>
+              <option value="3">Dense (3px)</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <label>Coloring:</label>
+            <select id="colorModeSelect" onchange="renderPlot()">
+              <option value="species">By Species Cluster</option>
+              <option value="trend">By Pitch Rise/Fall</option>
+              <option value="energy">By Vocal Power (dB)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Viewport: Toolbar + Split Row (3D Plot on Left + Bird Photo alongside on Right) -->
+    <div class="viewport-container">
+      <div class="viz-toolbar">
+        <div class="btn-group">
+          <span style="font-size:0.72rem; color:var(--text-secondary); align-self:center; margin-right:4px;">Camera View:</span>
+          <button class="tool-btn active" onclick="setCamera('image2')">Image 2 View</button>
+          <button class="tool-btn" onclick="setCamera('side')">Frequency vs Energy (Y-Z)</button>
+          <button class="tool-btn" onclick="setCamera('top')">Time vs Frequency (X-Y)</button>
+        </div>
+        <div class="btn-group">
+          <button class="tool-btn" onclick="resetCamera()">Reset View</button>
+        </div>
+      </div>
+
+      <!-- Split Container: 3D Plot Canvas + Bird Image & Specimen Card Alongside It -->
+      <div class="plot-and-bird-split">
+        
+        <!-- The 3D Point Cloud Viewport -->
+        <div class="viz-canvas" id="plotCanvas">
+          <!-- Bottom Caption Banner Matching Image 2 -->
+          <div class="caption-banner">
+            <div class="caption-left">
+              Point opacity encodes the pitch model's confidence for that frame — dimmer points are less certain
+            </div>
+            <div class="caption-right" id="captionSpeciesLabel">
+              Great Reed Warbler (Song)
+            </div>
+          </div>
+        </div>
+
+        <!-- The Dedicated Bird Showcase Card Positioned Directly Alongside the Plot -->
+        <div class="alongside-bird-card" id="alongsideBirdCard">
+          <div class="alongside-header">
+            <div class="alongside-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7h.01"/><path d="M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 18"/><path d="m20 7 2 .5-2 .5"/><path d="M10 18v3"/><path d="M14 17.75V21"/><path d="M7 18a6 6 0 0 0 3.84-10.61"/></svg>
+              Bird Specimen
+            </div>
+            <span class="badge" id="alongsideCategoryBadge">Songbird</span>
+          </div>
+
+          <div class="alongside-img-wrapper">
+            <img class="alongside-bird-img" id="alongsideBirdImg" src="" alt="Bird Photograph">
+            <div class="alongside-img-gradient"></div>
+          </div>
+
+          <div class="alongside-details">
+            <div>
+              <div class="alongside-species-title" id="alongsideBirdName">Great Reed Warbler</div>
+              <div class="alongside-species-sci" id="alongsideBirdSci">Acrocephalus arundinaceus</div>
+            </div>
+
+            <div class="alongside-stats-grid">
+              <div class="alongside-stat-box">
+                <span class="alongside-stat-label">Detected Notes</span>
+                <span class="alongside-stat-val" id="alongsideStatNotes">21 notes</span>
+              </div>
+              <div class="alongside-stat-box">
+                <span class="alongside-stat-label">Audio Duration</span>
+                <span class="alongside-stat-val" id="alongsideStatDur">12.00s</span>
+              </div>
+              <div class="alongside-stat-box">
+                <span class="alongside-stat-label">Acoustic Role</span>
+                <span class="alongside-stat-val" id="alongsideStatArchetype" style="font-size:0.75rem;">Melodic Song</span>
+              </div>
+              <div class="alongside-stat-box">
+                <span class="alongside-stat-label">Freq Band</span>
+                <span class="alongside-stat-val" id="alongsideStatFreq" style="font-size:0.75rem;">1.5 - 6.5 kHz</span>
+              </div>
+            </div>
+
+            <div class="alongside-bio-text" id="alongsideBioText">
+              Loud, vigorous song with rapid frequency modulation, harsh churring notes, and melodic whistles inhabiting dense Mediterranean wetlands.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let dataset12s = null;
+    let currentViewMode = 'single';
+    let currentSpeciesIdx = 0;
+    let isPlaying = false;
+    let animFrame = null;
+    let lastRender = 0;
+
+    // Palette matching Image 2
+    const SPECIES_PALETTE = {
+      'Great Reed Warbler': { rgb: [245, 197, 24], name: 'Great Reed Warbler (Song)' },        // Golden Yellow
+      'Common Kingfisher': { rgb: [91, 142, 245], name: 'Common Kingfisher (Whistle)' },       // Soft Blue
+      'Great Bittern': { rgb: [180, 134, 107], name: 'Great Bittern (Bass Boom)' },           // Earthy Brown/Tan
+      'Black-winged Stilt': { rgb: [248, 113, 113], name: 'Black-winged Stilt (Yapping)' },    // Warm Coral Red
+      'Lesser Spotted Woodpecker': { rgb: [253, 230, 138], name: 'Woodpecker (Piping)' },     // Cream Yellow
+      'Little Grebe': { rgb: [249, 115, 22], name: 'Little Grebe (Trill)' },                   // Warm Orange
+      'Western Yellow Wagtail': { rgb: [147, 197, 253], name: 'Yellow Wagtail (Flight)' }      // Sky Blue
+    };
+
+    let currentCamera = {
+      eye: { x: -1.65, y: -1.55, z: 1.15 },
+      center: { x: 0, y: 0, z: -0.15 }
+    };
+
+    const audioElement = document.getElementById('audioElement');
+    const playBtn = document.getElementById('playBtn');
+    const scrubber = document.getElementById('audioScrubber');
+    const curTimeLabel = document.getElementById('curTimeLabel');
+    const totalTimeLabel = document.getElementById('totalTimeLabel');
+    const livePitchVal = document.getElementById('livePitchVal');
+    const liveTrendPill = document.getElementById('liveTrendPill');
+    const trendIcon = document.getElementById('trendIcon');
+    const trendText = document.getElementById('trendText');
+    const activeNoteStatus = document.getElementById('activeNoteStatus');
+    const captionSpeciesLabel = document.getElementById('captionSpeciesLabel');
+
+    // Alongside Card Elements
+    const alongsideBirdCard = document.getElementById('alongsideBirdCard');
+    const alongsideBirdImg = document.getElementById('alongsideBirdImg');
+    const alongsideBirdName = document.getElementById('alongsideBirdName');
+    const alongsideBirdSci = document.getElementById('alongsideBirdSci');
+    const alongsideCategoryBadge = document.getElementById('alongsideCategoryBadge');
+    const alongsideStatNotes = document.getElementById('alongsideStatNotes');
+    const alongsideStatDur = document.getElementById('alongsideStatDur');
+    const alongsideStatArchetype = document.getElementById('alongsideStatArchetype');
+    const alongsideBioText = document.getElementById('alongsideBioText');
+
+    async function init() {
+      try {
+        const resp = await fetch('data/bird_vocalizations_12s.json');
+        dataset12s = await resp.json();
+        populateSpeciesSelect();
+        selectSpecies(0);
+      } catch (err) {
+        console.error('Init error:', err);
+        document.getElementById('plotCanvas').innerHTML = `
+          <div style="padding:40px; text-align:center; color:#ef4444;">
+            <h3>Error loading dataset: ${err.message}</h3>
+          </div>
+        `;
+      }
+    }
+
+    function switchView(mode) {
+      currentViewMode = mode;
+      document.getElementById('tabSingle').classList.toggle('active', mode === 'single');
+      document.getElementById('tabMulti').classList.toggle('active', mode === 'multi');
+      document.getElementById('notesPanel').style.display = (mode === 'single') ? 'block' : 'none';
+
+      if (mode === 'multi') {
+        pauseAudio();
+        captionSpeciesLabel.textContent = 'All Species Multi-Cluster View';
+        alongsideBirdCard.style.display = 'none';
+        document.querySelector('.plot-and-bird-split').style.gridTemplateColumns = '1fr';
+        renderMultiPointCloud();
+      } else {
+        alongsideBirdCard.style.display = 'flex';
+        document.querySelector('.plot-and-bird-split').style.gridTemplateColumns = '1fr 310px';
+        selectSpecies(currentSpeciesIdx);
+      }
+    }
+
+    function populateSpeciesSelect() {
+      const select = document.getElementById('speciesSelect');
+      select.innerHTML = '';
+      dataset12s.species.forEach((sp, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.textContent = `${sp.common_name} (${sp.notes_count} notes)`;
+        select.appendChild(opt);
+      });
+    }
+
+    function onSpeciesChange() {
+      const idx = parseInt(document.getElementById('speciesSelect').value);
+      selectSpecies(idx);
+    }
+
+    function selectSpecies(idx) {
+      currentSpeciesIdx = idx;
+      const sp = dataset12s.species[idx];
+      document.getElementById('categoryBadge').textContent = sp.category.split('&')[0];
+      totalTimeLabel.textContent = `${sp.duration_sec.toFixed(2)}s`;
+      captionSpeciesLabel.textContent = `${sp.common_name} (Zenodo 7505820)`;
+
+      // Update The Dedicated Card Positioned Alongside The Plot
+      const imgPath = sp.image_url || `images/${sp.species.replace(' ', '_')}.jpg`;
+      alongsideBirdImg.src = imgPath;
+      alongsideBirdName.textContent = sp.common_name;
+      alongsideBirdSci.textContent = sp.species;
+      alongsideCategoryBadge.textContent = sp.category.split(' ')[0];
+      alongsideStatNotes.textContent = `${sp.notes_count} notes`;
+      alongsideStatDur.textContent = `${sp.duration_sec.toFixed(1)}s`;
+      alongsideStatArchetype.textContent = sp.category.split('&')[0];
+      alongsideBioText.textContent = sp.description || 'Acoustic vocalization in Mediterranean wetland habitat.';
+
+      if (sp.audio_url) {
+        audioElement.src = sp.audio_url;
+        audioElement.load();
+      }
+
+      pauseAudio();
+      scrubber.value = 0;
+      curTimeLabel.textContent = '0.00s';
+
+      populateNotesList(sp.notes || []);
+      renderPlot(0.0);
+    }
+
+    function populateNotesList(notes) {
+      const container = document.getElementById('noteListContainer');
+      document.getElementById('notesCountBadge').textContent = `${notes.length} Notes`;
+      container.innerHTML = '';
+
+      notes.forEach(n => {
+        const item = document.createElement('div');
+        item.className = 'note-item';
+        item.id = `note-${n.id}`;
+
+        let icon = '→';
+        let col = '#0284c7';
+        if (n.direction === 'rising') { icon = '↗'; col = '#059669'; }
+        else if (n.direction === 'falling') { icon = '↘'; col = '#dc2626'; }
+        else if (n.direction === 'oscillating') { icon = '~'; col = '#7c3aed'; }
+
+        item.innerHTML = `
+          <div>
+            <strong>Note #${n.id}</strong>
+            <span style="color:#64748b; margin-left:6px;">${n.start_time.toFixed(2)}s - ${n.end_time.toFixed(2)}s</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="font-family:monospace; color:#0f172a; font-weight:600;">${Math.round(n.mean_freq_khz * 1000)} Hz</span>
+            <span style="color:${col}; font-weight:700;">${icon}</span>
+          </div>
+        `;
+
+        item.onclick = () => {
+          jumpToTime(n.start_time);
+        };
+
+        container.appendChild(item);
+      });
+    }
+
+    function jumpToTime(sec) {
+      audioElement.currentTime = sec;
+      curTimeLabel.textContent = `${sec.toFixed(2)}s`;
+      scrubber.value = sec / (audioElement.duration || 12.0);
+      updateLiveHUD(sec);
+      renderPlot(sec);
+    }
+
+    function setSpeed(speed) {
+      audioElement.playbackRate = speed;
+      document.querySelectorAll('.speed-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.includes(speed.toString()));
+      });
+    }
+
+    // Audio Playback
+    function togglePlay() {
+      if (isPlaying) {
+        pauseAudio();
+      } else {
+        playAudio();
+      }
+    }
+
+    function playAudio() {
+      audioElement.play().then(() => {
+        isPlaying = true;
+        playBtn.textContent = '⏸';
+        playBtn.style.background = '#dc2626';
+        loopPlayback();
+      }).catch(e => console.warn(e));
+    }
+
+    function pauseAudio() {
+      audioElement.pause();
+      isPlaying = false;
+      playBtn.textContent = '▶';
+      playBtn.style.background = '#0f172a';
+      if (animFrame) cancelAnimationFrame(animFrame);
+    }
+
+    function onAudioEnded() {
+      pauseAudio();
+      scrubber.value = 0;
+      curTimeLabel.textContent = '0.00s';
+      renderPlot(0.0);
+    }
+
+    function onAudioTimeUpdate() {
+      if (!isPlaying) return;
+      const t = audioElement.currentTime;
+      const dur = audioElement.duration || 12.0;
+      scrubber.value = t / dur;
+      curTimeLabel.textContent = `${t.toFixed(2)}s`;
+    }
+
+    function onScrub(val) {
+      const dur = audioElement.duration || 12.0;
+      const t = parseFloat(val) * dur;
+      audioElement.currentTime = t;
+      curTimeLabel.textContent = `${t.toFixed(2)}s`;
+      updateLiveHUD(t);
+      renderPlot(t);
+    }
+
+    function loopPlayback() {
+      if (!isPlaying) return;
+      const t = audioElement.currentTime;
+      const now = performance.now();
+      if (now - lastRender > 28) {
+        lastRender = now;
+        updateLiveHUD(t);
+        renderPlot(t);
+      }
+      animFrame = requestAnimationFrame(loopPlayback);
+    }
+
+    function updateLiveHUD(t) {
+      const sp = dataset12s.species[currentSpeciesIdx];
+      const traj = sp.trajectory;
+      const p = traj.reduce((prev, curr) => Math.abs(curr.time - t) < Math.abs(prev.time - t) ? curr : prev, traj[0]);
+
+      const freqHz = Math.round(p.freq_khz * 1000);
+      livePitchVal.innerHTML = `${freqHz} <span style="font-size:0.75rem; color:#64748b; font-weight:normal;">Hz</span>`;
+
+      liveTrendPill.className = 'tone-trend-pill';
+      if (!p.is_voice) {
+        liveTrendPill.classList.add('trend-silence');
+        trendIcon.textContent = '○';
+        trendText.textContent = 'PAUSE / BREATH';
+      } else if (p.pitch_trend === 'rising') {
+        liveTrendPill.classList.add('trend-rising');
+        trendIcon.textContent = '▲';
+        trendText.textContent = `PITCH RISING (+${Math.round(p.slope_hz_s)} Hz/s)`;
+      } else if (p.pitch_trend === 'falling') {
+        liveTrendPill.classList.add('trend-falling');
+        trendIcon.textContent = '▼';
+        trendText.textContent = `PITCH FALLING (${Math.round(p.slope_hz_s)} Hz/s)`;
+      } else {
+        liveTrendPill.classList.add('trend-steady');
+        trendIcon.textContent = '◆';
+        trendText.textContent = 'STEADY TONE';
+      }
+
+      if (p.note_id) {
+        activeNoteStatus.innerHTML = `Active Note: <strong>#${p.note_id} (${p.note_type})</strong>`;
+        document.querySelectorAll('.note-item').forEach(el => el.classList.remove('active-note'));
+        const activeEl = document.getElementById(`note-${p.note_id}`);
+        if (activeEl) {
+          activeEl.classList.add('active-note');
+          activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      } else {
+        activeNoteStatus.innerHTML = 'Active Note: <span style="color:#64748b">Pause / Silence</span>';
+        document.querySelectorAll('.note-item').forEach(el => el.classList.remove('active-note'));
+      }
+    }
+
+    // Single Species Point Cloud with Moving Point Tracker
+    function renderPlot(currentTime = null) {
+      if (currentViewMode === 'multi') {
+        renderMultiPointCloud();
+        return;
+      }
+
+      const sp = dataset12s.species[currentSpeciesIdx];
+      const traj = sp.trajectory;
+      const pointSize = parseInt(document.getElementById('pointSizeSelect').value);
+      const colorMode = document.getElementById('colorModeSelect').value;
+
+      const pal = SPECIES_PALETTE[sp.common_name] || { rgb: [91, 142, 245], name: sp.common_name };
+      const baseRgb = pal.rgb;
+
+      const times = traj.map(p => p.time);
+      const freqsHz = traj.map(p => p.freq_khz * 1000.0);
+      const dbs = traj.map(p => p.db);
+
+      const colors = traj.map(p => {
+        const conf = Math.max(0.12, Math.min(0.95, (p.db + 60.0) / 45.0));
+        if (colorMode === 'trend') {
+          if (p.pitch_trend === 'rising') return `rgba(5, 150, 105, ${conf.toFixed(2)})`;
+          if (p.pitch_trend === 'falling') return `rgba(220, 38, 38, ${conf.toFixed(2)})`;
+          return `rgba(2, 132, 199, ${conf.toFixed(2)})`;
+        } else if (colorMode === 'energy') {
+          const norm = Math.max(0, Math.min(1, (p.db + 55) / 45));
+          const r = Math.round(norm * 240);
+          const g = Math.round((1 - Math.abs(norm - 0.5)*2) * 200);
+          const b = Math.round((1 - norm) * 240);
+          return `rgba(${r}, ${g}, ${b}, ${conf.toFixed(2)})`;
+        }
+        return `rgba(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]}, ${conf.toFixed(2)})`;
+      });
+
+      const traces = [];
+
+      // 1. Point Cloud Trace
+      traces.push({
+        type: 'scatter3d',
+        x: times,
+        y: freqsHz,
+        z: dbs,
+        mode: 'markers',
+        marker: {
+          size: pointSize,
+          color: colors,
+          line: { width: 0 }
+        },
+        name: sp.common_name,
+        hovertemplate: (
+          `<b>${sp.common_name}</b><br>` +
+          'Time (X): %{x:.2f}s<br>' +
+          'Frequency (Y): %{y:.0f} Hz<br>' +
+          'Energy (Z): %{z:.1f} dB<extra></extra>'
+        )
+      });
+
+      // 2. Note Guide Connections
+      if (sp.notes) {
+        sp.notes.forEach(n => {
+          const nPts = traj.filter(p => p.time >= n.start_time && p.time <= n.end_time);
+          if (nPts.length > 2) {
+            traces.push({
+              type: 'scatter3d',
+              x: nPts.map(p => p.time),
+              y: nPts.map(p => p.freq_khz * 1000.0),
+              z: nPts.map(p => p.db),
+              mode: 'lines',
+              line: {
+                color: `rgba(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]}, 0.4)`,
+                width: 2.5
+              },
+              hoverinfo: 'none',
+              showlegend: false
+            });
+          }
+        });
+      }
+
+      // 3. THE MOVING ACTIVE POINT
+      if (currentTime !== null && traj.length > 0) {
+        const curT = Math.min(sp.duration_sec, Math.max(0.0, currentTime));
+        const activeIdx = traj.findIndex(p => p.time >= curT);
+        const pIdx = activeIdx >= 0 ? activeIdx : traj.length - 1;
+        const curP = traj[pIdx];
+
+        // Trailing comet ribbon
+        const trailStart = Math.max(0, pIdx - 12);
+        const trail = traj.slice(trailStart, pIdx + 1);
+
+        if (trail.length > 1) {
+          traces.push({
+            type: 'scatter3d',
+            x: trail.map(p => p.time),
+            y: trail.map(p => p.freq_khz * 1000.0),
+            z: trail.map(p => p.db + 1.5),
+            mode: 'lines',
+            line: { color: '#f59e0b', width: 6 },
+            hoverinfo: 'none',
+            showlegend: false
+          });
+        }
+
+        // Live Moving Tone Point
+        let pColor = '#2563eb';
+        if (curP.pitch_trend === 'rising') pColor = '#059669';
+        else if (curP.pitch_trend === 'falling') pColor = '#dc2626';
+
+        traces.push({
+          type: 'scatter3d',
+          x: [curP.time],
+          y: [curP.freq_khz * 1000.0],
+          z: [curP.db + 2.5],
+          mode: 'markers',
+          marker: {
+            size: 11,
+            color: pColor,
+            symbol: 'circle',
+            line: { color: '#ffffff', width: 2.5 }
+          },
+          name: 'Live Voice Tone Point',
+          hovertemplate: (
+            '<b>Live Moving Tone</b><br>' +
+            'Time (X): %{x:.2f}s<br>' +
+            'Frequency (Y): %{y:.0f} Hz<br>' +
+            'Pitch Trend: ' + curP.pitch_trend.toUpperCase() + '<extra></extra>'
+          )
+        });
+
+        // Vertical Guide Dropline
+        traces.push({
+          type: 'scatter3d',
+          x: [curP.time, curP.time],
+          y: [curP.freq_khz * 1000.0, curP.freq_khz * 1000.0],
+          z: [-65, curP.db + 2.5],
+          mode: 'lines',
+          line: { color: pColor, width: 2, dash: 'dot' },
+          hoverinfo: 'none',
+          showlegend: false
+        });
+      }
+
+      // Exact Layout from Image 2
+      const layout = {
+        paper_bgcolor: '#fafaf8',
+        plot_bgcolor: '#fafaf8',
+        scene: {
+          xaxis: {
+            title: { text: 'X', font: { size: 14, color: '#334155' } },
+            backgroundcolor: '#ffffff',
+            gridcolor: '#ebece9',
+            showbackground: true,
+            zerolinecolor: '#cbd5e1',
+            tickfont: { size: 11, color: '#64748b' }
+          },
+          yaxis: {
+            title: { text: 'Y', font: { size: 14, color: '#334155' } },
+            range: [0, 8500],
+            backgroundcolor: '#ffffff',
+            gridcolor: '#ebece9',
+            showbackground: true,
+            zerolinecolor: '#cbd5e1',
+            tickvals: [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000],
+            tickfont: { size: 11, color: '#64748b' }
+          },
+          zaxis: {
+            title: { text: 'Z', font: { size: 14, color: '#334155' } },
+            range: [-65, -5],
+            backgroundcolor: '#ffffff',
+            gridcolor: '#ebece9',
+            showbackground: true,
+            zerolinecolor: '#cbd5e1',
+            tickvals: [-60, -50, -40, -30, -20, -10],
+            tickfont: { size: 11, color: '#64748b' }
+          },
+          camera: currentCamera,
+          aspectratio: { x: 1.35, y: 1.25, z: 0.85 }
+        },
+        margin: { l: 0, r: 0, t: 10, b: 20 },
+        legend: {
+          x: 0.02,
+          y: 0.95,
+          font: { family: 'Segoe UI, sans-serif', size: 11, color: '#334155' },
+          bgcolor: 'rgba(255, 255, 255, 0.85)',
+          bordercolor: '#e2e8f0',
+          borderwidth: 1
+        }
+      };
+
+      Plotly.react('plotCanvas', traces, layout, { responsive: true, displayModeBar: true });
+    }
+
+    // Multi-Species Point Cloud View (Image 2 Style)
+    function renderMultiPointCloud() {
+      const pointSize = parseInt(document.getElementById('pointSizeSelect').value);
+      const traces = [];
+
+      dataset12s.species.forEach(sp => {
+        const pal = SPECIES_PALETTE[sp.common_name] || { rgb: [91, 142, 245], name: sp.common_name };
+        const rgb = pal.rgb;
+        const traj = sp.trajectory;
+
+        const times = traj.map(p => p.time);
+        const freqsHz = traj.map(p => p.freq_khz * 1000.0);
+        const dbs = traj.map(p => p.db);
+
+        const colors = dbs.map(db => {
+          const conf = Math.max(0.12, Math.min(0.95, (db + 60.0) / 45.0));
+          return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${conf.toFixed(2)})`;
+        });
+
+        traces.push({
+          type: 'scatter3d',
+          x: times,
+          y: freqsHz,
+          z: dbs,
+          mode: 'markers',
+          marker: {
+            size: pointSize,
+            color: colors,
+            line: { width: 0 }
+          },
+          name: pal.name,
+          hovertemplate: (
+            `<b>${sp.common_name}</b><br>` +
+            'Time (X): %{x:.2f}s<br>' +
+            'Frequency (Y): %{y:.0f} Hz<br>' +
+            'Energy (Z): %{z:.1f} dB<extra></extra>'
+          )
+        });
+      });
+
+      const layout = {
+        paper_bgcolor: '#fafaf8',
+        plot_bgcolor: '#fafaf8',
+        scene: {
+          xaxis: {
+            title: { text: 'X', font: { size: 14, color: '#334155' } },
+            backgroundcolor: '#ffffff',
+            gridcolor: '#ebece9',
+            showbackground: true,
+            zerolinecolor: '#cbd5e1',
+            tickfont: { size: 11, color: '#64748b' }
+          },
+          yaxis: {
+            title: { text: 'Y', font: { size: 14, color: '#334155' } },
+            range: [0, 8500],
+            backgroundcolor: '#ffffff',
+            gridcolor: '#ebece9',
+            showbackground: true,
+            zerolinecolor: '#cbd5e1',
+            tickvals: [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000],
+            tickfont: { size: 11, color: '#64748b' }
+          },
+          zaxis: {
+            title: { text: 'Z', font: { size: 14, color: '#334155' } },
+            range: [-65, -5],
+            backgroundcolor: '#ffffff',
+            gridcolor: '#ebece9',
+            showbackground: true,
+            zerolinecolor: '#cbd5e1',
+            tickvals: [-60, -50, -40, -30, -20, -10],
+            tickfont: { size: 11, color: '#64748b' }
+          },
+          camera: currentCamera,
+          aspectratio: { x: 1.35, y: 1.25, z: 0.85 }
+        },
+        margin: { l: 0, r: 0, t: 10, b: 20 },
+        legend: {
+          x: 0.02,
+          y: 0.95,
+          font: { family: 'Segoe UI, sans-serif', size: 11, color: '#334155' },
+          bgcolor: 'rgba(255, 255, 255, 0.85)',
+          bordercolor: '#e2e8f0',
+          borderwidth: 1
+        }
+      };
+
+      Plotly.react('plotCanvas', traces, layout, { responsive: true, displayModeBar: true });
+    }
+
+    // Camera Presets
+    function setCamera(type) {
+      document.querySelectorAll('.viz-toolbar .tool-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+
+      if (type === 'image2') {
+        currentCamera = { eye: { x: -1.65, y: -1.55, z: 1.15 }, center: { x: 0, y: 0, z: -0.15 } };
+      } else if (type === 'side') {
+        currentCamera = { eye: { x: -2.3, y: 0, z: 0.1 }, center: { x: 0, y: 0, z: 0 } };
+      } else if (type === 'top') {
+        currentCamera = { eye: { x: 0, y: 0, z: 2.3 }, center: { x: 0, y: 0, z: 0 } };
+      }
+      renderPlot(audioElement.currentTime || null);
+    }
+
+    function resetCamera() {
+      currentCamera = { eye: { x: -1.65, y: -1.55, z: 1.15 }, center: { x: 0, y: 0, z: -0.15 } };
+      renderPlot(audioElement.currentTime || null);
+    }
+
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

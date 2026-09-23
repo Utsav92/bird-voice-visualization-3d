@@ -1,0 +1,14 @@
+# Temporary files
+temp_*
+*.wav.tmp
+*.mp3.tmp
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
